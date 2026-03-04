@@ -6,7 +6,6 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  // Verify Supabase JWT token
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: '未登录，请先登录' });
@@ -17,15 +16,9 @@ export default async function handler(req, res) {
   const supabaseKey = process.env.SUPABASE_ANON_KEY;
 
   const userRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'apikey': supabaseKey,
-    }
+    headers: { 'Authorization': `Bearer ${token}`, 'apikey': supabaseKey }
   });
-
-  if (!userRes.ok) {
-    return res.status(401).json({ error: '登录已过期，请重新登录' });
-  }
+  if (!userRes.ok) return res.status(401).json({ error: '登录已过期，请重新登录' });
 
   const { content, mode } = req.body;
   if (!content) return res.status(400).json({ error: '缺少文章内容' });
@@ -50,27 +43,43 @@ export default async function handler(req, res) {
         'Authorization': `Bearer ${process.env.OLLAMA_API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'qwen3-vl:235b-cloud',
+        model: 'minimax-m2.5:cloud',
         prompt: fullPrompt,
         stream: false,
+        num_predict: 8000,
       })
     });
 
+    // Get raw text first
+    const rawText = await ollamaRes.text();
+
     if (!ollamaRes.ok) {
-      const err = await ollamaRes.text();
-      return res.status(500).json({ error: `模型调用失败: ${err}` });
+      return res.status(500).json({ error: `Ollama错误 (${ollamaRes.status}): ${rawText}` });
     }
 
-    const data = await ollamaRes.json();
-    let raw = data.response || '';
+    // Parse the outer Ollama response
+    let ollamaData;
+    try {
+      ollamaData = JSON.parse(rawText);
+    } catch(e) {
+      return res.status(500).json({ error: `Ollama返回格式异常: ${rawText.slice(0, 200)}` });
+    }
+
+    let raw = ollamaData.response || '';
     raw = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
     const s = raw.indexOf('{'), e = raw.lastIndexOf('}');
     if (s > -1) raw = raw.slice(s, e + 1);
 
-    const parsed = JSON.parse(raw);
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch(e) {
+      return res.status(500).json({ error: `模型输出解析失败: ${raw.slice(0, 300)}` });
+    }
+
     return res.status(200).json(parsed);
 
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: `请求失败: ${err.message}` });
   }
 }
