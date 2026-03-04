@@ -30,7 +30,7 @@ export default async function handler(req, res) {
     vocab: '重点填写词汇相关字段。'
   };
 
-  const systemPrompt = `你是资深英文语言学专家。请只输出如下格式的JSON，不要输出任何其他内容（包括markdown代码块）：
+  const systemPrompt = `你是资深英文语言学专家，专门帮助中文学习者精读英文文章。所有分析、翻译、释义必须用中文。literal字段是逐字直译（中文），natural字段是地道中文意译，meaning字段是中文词义，structures字段是中文句意结构。请只输出如下格式的JSON，不要输出任何其他内容：
 {"overview":{"topic":"","core":"","level":"","time":"","audience":""},"original":"","sentences":[{"para":1,"index":1,"en":"","subject":"","predicate":"","object":"","structures":[],"vocab":[{"word":"","pos":"","meaning":""}],"literal":"","natural":""}],"grammar":[{"name":"","frequency":"","example":"","explain":""}],"learning":{"vocab":[],"synonyms":[],"collocations":[],"patterns":[],"tips":[],"background":[]}}`;
 
   const fullPrompt = `${systemPrompt}\n\n${modeHints[mode] || modeHints.full}\n\n文章：\n${content}`;
