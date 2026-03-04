@@ -1,5 +1,4 @@
 export default async function handler(req, res) {
-  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -14,8 +13,6 @@ export default async function handler(req, res) {
   }
 
   const token = authHeader.split(' ')[1];
-
-  // Verify token with Supabase
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_ANON_KEY;
 
@@ -43,10 +40,10 @@ export default async function handler(req, res) {
   const systemPrompt = `你是资深英文语言学专家。请只输出如下格式的JSON，不要输出任何其他内容（包括markdown代码块）：
 {"overview":{"topic":"","core":"","level":"","time":"","audience":""},"original":"","sentences":[{"para":1,"index":1,"en":"","subject":"","predicate":"","object":"","structures":[],"vocab":[{"word":"","pos":"","meaning":""}],"literal":"","natural":""}],"grammar":[{"name":"","frequency":"","example":"","explain":""}],"learning":{"vocab":[],"synonyms":[],"collocations":[],"patterns":[],"tips":[],"background":[]}}`;
 
-  const userPrompt = `${modeHints[mode] || modeHints.full}\n\n文章：\n${content}`;
+  const fullPrompt = `${systemPrompt}\n\n${modeHints[mode] || modeHints.full}\n\n文章：\n${content}`;
 
   try {
-    const ollamaRes = await fetch('https://api.ollama.com/v1/chat/completions', {
+    const ollamaRes = await fetch('https://ollama.com/api/generate', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -54,10 +51,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: 'qwen3-vl:235b-cloud',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
+        prompt: fullPrompt,
         stream: false,
       })
     });
@@ -68,7 +62,7 @@ export default async function handler(req, res) {
     }
 
     const data = await ollamaRes.json();
-    let raw = data.choices?.[0]?.message?.content || '';
+    let raw = data.response || '';
     raw = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
     const s = raw.indexOf('{'), e = raw.lastIndexOf('}');
     if (s > -1) raw = raw.slice(s, e + 1);
